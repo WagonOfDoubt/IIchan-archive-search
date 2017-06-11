@@ -7,7 +7,9 @@
 // @author       Cirno
 // @updateURL    https://raw.github.com/WagonOfDoubt/IIchan-archive-search/master/IIchan-archive-search.user.js
 // @include      http://iichan.hk/*/arch/res/*
+// @include      https://iichan.hk/*/arch/res/*
 // @exclude      http://iichan.hk/*/arch/res/*.html
+// @exclude      https://iichan.hk/*/arch/res/*.html
 // @grant        none
 // ==/UserScript==
 
