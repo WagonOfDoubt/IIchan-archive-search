@@ -10,6 +10,10 @@
 // @include      https://iichan.hk/*/arch/res/*
 // @exclude      http://iichan.hk/*/arch/res/*.html
 // @exclude      https://iichan.hk/*/arch/res/*.html
+// @include      http://nowere.net/*/arch/*
+// @include      https://nowere.net/*/arch/*
+// @exclude      http://nowere.net/*/arch/*/
+// @exclude      https://nowere.net/*/arch/*/
 // @grant        none
 // ==/UserScript==
 
@@ -19,7 +23,7 @@
 
   const MAX_OPPOST_LENGTH = 200;
   const LOCALSTORAGE_KEY = 'iichan_archive';
-  const getBoard = () => window.location.href.match(/(?:iichan\.hk\/)(.*)(?=\/arch\/res\/)/)[1];
+  const getBoard = () => window.location.href.match(/(?:[^:/]*\.[^:/]*)\/([^:/]*)/)[1];
 
   class Storage {
     constructor(board) {
@@ -30,24 +34,25 @@
       this.boardArchive = this.localArchive[board];
       this.threadsSaved = Object.keys(this.boardArchive).length;
     }
-
+  
     addThread(thread) {
       this.boardArchive[thread.id] = thread;
       Storage.save(this.localArchive);
     }
-
+  
     getThread(threadId) {
       return this.boardArchive[threadId];
     }
-
+  
     static load() {
       return JSON.parse(window.localStorage.getItem(LOCALSTORAGE_KEY) || '{}');
     }
-
+  
     static save(object) {
       window.localStorage.setItem(LOCALSTORAGE_KEY, JSON.stringify(object));
     }
   }
+  
 
   class UpdateQueue {
     constructor(storage, callback) {
@@ -57,14 +62,14 @@
       this.isRunning = false;
       this._pendingXHR = null;
     }
-
+  
     start() {
       this.isRunning = this.queue.length > 0;
       if (this.isRunning) {
         this.loadThread(this.queue.pop());
       }
     }
-
+  
     stop() {
       this.isRunning = false;
       if (this._pendingXHR) {
@@ -72,27 +77,27 @@
         this._pendingXHR = null;
       }
     }
-
+  
     clear() {
       this.stop();
       this.queue.length = 0;
     }
-
+  
     add(threads) {
       this.queue.push.apply(this.queue, threads);
     }
-
+  
     get size() {
       return this.queue.length;
     }
-
+  
     loadThread(threadId) {
       const savedThread = this.storage.getThread(threadId);
       if (savedThread) {
         if (this.threadLoadedCallback) {
           this.threadLoadedCallback(savedThread);
         }
-
+  
         if (this.queue.length > 0) {
           this.loadThread(this.queue.pop());
         } else {
@@ -103,7 +108,7 @@
         this.loadDoc(url);
       }
     }
-
+  
     loadDoc(url) {
       const xhr = new XMLHttpRequest();
       const self = this;
@@ -127,14 +132,14 @@
       xhr.open("GET", url, true);
       xhr.send();
     }
-
+  
     onThreadLoaded(response) {
       const newThread = ThreadParser.parseThread(response);
       this.storage.addThread(newThread);
       if (this.threadLoadedCallback) {
         this.threadLoadedCallback(newThread);
       }
-
+  
       if (this.queue.length > 0) {
         this.loadThread(this.queue.pop());
       } else {
@@ -142,6 +147,7 @@
       }
     }
   }
+  
 
   class TableParser {
     static _parseRow(row) {
@@ -242,32 +248,151 @@
   }
 
   const constructPage = (stats) => {
-    document.head.insertAdjacentHTML('beforeend', `<style type="text/css">
-      .ii-years a { cursor: pointer; }
-      .ii-years a.current { color: unset; font-weight: bold; }
-      .ii-years span:not(:first-child) { margin-left: .5em; }
-      .ii-years span::before { content: '['; }
-      .ii-years span::after { content: ']'; }
-      </style>`);
-    document.head.insertAdjacentHTML('beforeend', `<style type="text/css"> body { margin: 0; padding: 8px; margin-bottom: auto; } blockquote blockquote { margin-left: 0em } form { margin-bottom: 0px } form .trap { display:none } .postarea { text-align: center } .postarea table { margin: 0px auto; text-align: left } .thumb { border: none; float: left; margin: 2px 20px } .nothumb { float: left; background: #eee; border: 2px dashed #aaa; text-align: center; margin: 2px 20px; padding: 1em 0.5em 1em 0.5em; } .reply blockquote, blockquote :last-child { margin-bottom: 0em } .reflink a { color: inherit; text-decoration: none } .reply .filesize { margin-left: 20px } .userdelete { float: right; text-align: center; white-space: nowrap } .replypage .replylink { display: none } .catthread { vertical-align: top; word-wrap: break-word; overflow: hidden; display:inline-block; padding: 4px; width:210px; max-height:350px; min-height:200px; margin-top: 5px; position: relative; } .catthread a {text-decoration: none; !important;} .catthread img {border:none; float: unset;}  .catthreadlist    { padding: 20px 0px; text-align: center; } </style>`);
-    document.head.insertAdjacentHTML('beforeend', `<link rel="alternate stylesheet" type="text/css" href="/cgi-bin/../css/burichan.css" title="Burichan">`);
-    document.head.insertAdjacentHTML('beforeend', `<link rel="stylesheet" type="text/css" href="/cgi-bin/../css/futaba.css" title="Futaba">`);
-    document.head.insertAdjacentHTML('beforeend', `<link rel="alternate stylesheet" type="text/css" href="/cgi-bin/../css/gurochan.css" title="Gurochan">`);
-    document.body.innerHTML = `<h1 class="logo">Ычан — Архив /${ stats.board }/</h1>
+    document.head.insertAdjacentHTML('beforeend', `
+      <style type="text/css">
+      .ii-years a {
+        cursor: pointer;
+      }
+      
+      .ii-years a.current {
+        color: unset;
+        font-weight: bold;
+      }
+      
+      .ii-years span:not(:first-child) {
+        margin-left: .5em;
+      }
+      
+      .ii-years span::before {
+        content: '[';
+      }
+      
+      .ii-years span::after {
+        content: ']';
+      }
+      </style>
+      <style type="text/css">
+      body {
+        margin: 0;
+        padding: 8px;
+        margin-bottom: auto;
+      }
+      
+      blockquote blockquote {
+        margin-left: 0em
+      }
+      
+      form {
+        margin-bottom: 0px
+      }
+      
+      form .trap {
+        display: none
+      }
+      
+      .postarea {
+        text-align: center
+      }
+      
+      .postarea table {
+        margin: 0px auto;
+        text-align: left
+      }
+      
+      .thumb {
+        border: none;
+        float: left;
+        margin: 2px 20px
+      }
+      
+      .nothumb {
+        float: left;
+        background: #eee;
+        border: 2px dashed #aaa;
+        text-align: center;
+        margin: 2px 20px;
+        padding: 1em 0.5em 1em 0.5em;
+      }
+      
+      .reply blockquote,
+      blockquote:last-child {
+        margin-bottom: 0em
+      }
+      
+      .reflink a {
+        color: inherit;
+        text-decoration: none
+      }
+      
+      .reply .filesize {
+        margin-left: 20px
+      }
+      
+      .userdelete {
+        float: right;
+        text-align: center;
+        white-space: nowrap
+      }
+      
+      .replypage .replylink {
+        display: none
+      }
+      
+      .catthread {
+        vertical-align: top;
+        word-wrap: break-word;
+        overflow: hidden;
+        display: inline-block;
+        padding: 4px;
+        width: 210px;
+        max-height: 350px;
+        min-height: 200px;
+        margin-top: 5px;
+        position: relative;
+      }
+      
+      .catthread a {
+        text-decoration: none;
+        !important;
+      }
+      
+      .catthread img {
+        border: none;
+        float: unset;
+      }
+      
+      .catthreadlist {
+        padding: 20px 0px;
+        text-align: center;
+      }
+      
+      .catthreadlist a {
+        display: inline-block;
+      }
+      </style>
+      <link rel="alternate stylesheet" type="text/css" href="/cgi-bin/../css/burichan.css" title="Burichan">
+      <link rel="stylesheet" type="text/css" href="/cgi-bin/../css/futaba.css" title="Futaba">
+      <link rel="alternate stylesheet" type="text/css" href="/cgi-bin/../css/gurochan.css" title="Gurochan">
+      
+      `);
+    document.body.innerHTML = `
+    <h1 class="logo">Ычан — Архив /${ stats.board }/</h1>
     <hr>
     <div>[<a href="/${ stats.board }/index.html">Назад в /${ stats.board }/</a>]</div>
     <div class="theader">Архив <b>(${ stats.threadsTotal })</b></div>
     <div class="postarea ii-years"></div>
     <div class="postarea">
-    <table class="ii-loader">
-    <tbody>
-    <tr>
-    <td><span class="ii-loader-label">Обновление списка тредов...</span></td>
-    <td><progress value="${ stats.threadsSaved }" max="${ stats.threadsTotal }"></progress></td>
-    <td>(<span class="ii-lodaer-value">${ stats.threadsSaved }</span>/<span class="ii-loader-total">${ stats.threadsTotal }</span>)</td>
-    </tr>
-    </tbody>
-    </table>
+      <table class="ii-loader">
+        <tbody>
+          <tr>
+            <td><span class="ii-loader-label">Обновление списка тредов...</span></td>
+            <td>
+              <progress value="${ stats.threadsSaved }" max="${ stats.threadsTotal }"></progress>
+            </td>
+            <td>(<span class="ii-lodaer-value">${ stats.threadsSaved }</span>/<span class="ii-loader-total">${ stats.threadsTotal }</span>)</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
     <!-- <div class="postarea">
     <table style="margin: inherit;">
@@ -297,7 +422,9 @@
     <div class="catthreadlist">
     </div>
     <div>[<a href="/${ stats.board }/index.html">Назад в /${ stats.board }/</a>]</div>
-    <hr>`;
+    <hr>
+    
+    `;
   };
 
   const createThread = (thread) => {
@@ -305,13 +432,18 @@
     const createdDate = (new Date(thread.created)).toLocaleDateString();
     const bumpedDate = (new Date(thread.bumped)).toLocaleDateString();
 
-    parent.insertAdjacentHTML('beforeend', `<a title="#${ thread.id } (${ createdDate } - ${ bumpedDate })" href="./${ thread.id }.html"><div class="catthread">
-      <img src="${ thread.thumb }" alt="${ thread.id }">
-      <div><span title="Постов в треде">${ thread.replies + 1 }</span>/<span title="Картинок в треде">${ thread.images }</span></div>
-      <div class="postertrip">[${ createdDate } - ${ bumpedDate }]</div>
-      <div class="filetitle">${ thread.subject }</div>
-      <span class="cattext">${ thread.post }</span>
-      </div></a>`);
+    parent.insertAdjacentHTML('beforeend', `
+      <a title="#${ thread.id } (${ createdDate } - ${ bumpedDate })" href="./${ thread.id }.html">
+        <div class="catthread">
+          <img src="${ thread.thumb }" alt="${ thread.id }">
+          <div><span title="Постов в треде">${ thread.replies + 1 }</span>/<span title="Картинок в треде">${ thread.images }</span></div>
+          <div class="postertrip">[${ createdDate } - ${ bumpedDate }]</div>
+          <div class="filetitle">${ thread.subject }</div>
+          <span class="cattext">${ thread.post }</span>
+        </div>
+      </a>
+      
+      `);
   };
 
   const setStylesheet = () => {

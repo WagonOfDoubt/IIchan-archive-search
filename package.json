@@ -1,0 +1,30 @@
+{
+  "name": "iichan-archive-search",
+  "version": "1.0.0",
+  "description": "Archive viewer userscript for some imageboards",
+  "scripts": {
+    "build": "gulp",
+    "test": "jshint *.js **/*.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WagonOfDoubt/IIchan-archive-search.git"
+  },
+  "keywords": [
+    "userscript",
+    "imageboards",
+    "javascript"
+  ],
+  "author": "Cirno",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/WagonOfDoubt/IIchan-archive-search/issues"
+  },
+  "homepage": "https://github.com/WagonOfDoubt/IIchan-archive-search#readme",
+  "devDependencies": {
+    "gulp": "^3.9.1",
+    "gulp-concat": "^2.6.1",
+    "gulp-include": "^2.3.1",
+    "pump": "^1.0.2"
+  }
+}

@@ -1,0 +1,9 @@
+<a title="#${ thread.id } (${ createdDate } - ${ bumpedDate })" href="./${ thread.id }.html">
+  <div class="catthread">
+    <img src="${ thread.thumb }" alt="${ thread.id }">
+    <div><span title="Постов в треде">${ thread.replies + 1 }</span>/<span title="Картинок в треде">${ thread.images }</span></div>
+    <div class="postertrip">[${ createdDate } - ${ bumpedDate }]</div>
+    <div class="filetitle">${ thread.subject }</div>
+    <span class="cattext">${ thread.post }</span>
+  </div>
+</a>
