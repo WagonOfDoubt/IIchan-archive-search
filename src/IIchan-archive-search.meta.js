@@ -10,9 +10,7 @@
 // @include      https://iichan.hk/*/arch/res/*
 // @exclude      http://iichan.hk/*/arch/res/*.html
 // @exclude      https://iichan.hk/*/arch/res/*.html
-// @include      http://nowere.net/*/arch/*
-// @include      https://nowere.net/*/arch/*
-// @exclude      http://nowere.net/*/arch/*/
-// @exclude      https://nowere.net/*/arch/*/
+// @include      http://nowere.net/*/arch/
+// @include      https://nowere.net/*/arch/
 // @grant        none
 // ==/UserScript==

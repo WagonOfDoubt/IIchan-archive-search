@@ -1,6 +1,7 @@
 class UpdateQueue {
-  constructor(storage, callback) {
+  constructor(storage, parser, callback) {
     this.storage = storage;
+    this.parserCallback = parser;
     this.threadLoadedCallback = callback;
     this.queue = [];
     this.isRunning = false;
@@ -35,8 +36,8 @@ class UpdateQueue {
     return this.queue.length;
   }
 
-  loadThread(threadId) {
-    const savedThread = this.storage.getThread(threadId);
+  loadThread(thread) {
+    const savedThread = this.storage.getThread(thread.id);
     if (savedThread) {
       if (this.threadLoadedCallback) {
         this.threadLoadedCallback(savedThread);
@@ -48,8 +49,7 @@ class UpdateQueue {
         this.stop();
       }
     } else {
-      const url = `${ window.location.origin }${ window.location.pathname }${ threadId }.html`;
-      this.loadDoc(url);
+      this.loadDoc(thread.url);
     }
   }
 
@@ -61,7 +61,7 @@ class UpdateQueue {
         self._pendingXHR = null;
       }
       if (this.status == 200) {
-        self.onThreadLoaded(this.response);
+        self.onThreadLoaded(this.response, url);
       } else {
         // reject(this.stats);
       }
@@ -77,11 +77,12 @@ class UpdateQueue {
     xhr.send();
   }
 
-  onThreadLoaded(response) {
-    const newThread = ThreadParser.parseThread(response);
-    this.storage.addThread(newThread);
+  onThreadLoaded(response, url) {
+    const thread = this.parserCallback(response);
+    thread.url = url;
+
     if (this.threadLoadedCallback) {
-      this.threadLoadedCallback(newThread);
+      this.threadLoadedCallback(thread);
     }
 
     if (this.queue.length > 0) {

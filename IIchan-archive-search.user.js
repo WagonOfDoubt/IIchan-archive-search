@@ -10,10 +10,8 @@
 // @include      https://iichan.hk/*/arch/res/*
 // @exclude      http://iichan.hk/*/arch/res/*.html
 // @exclude      https://iichan.hk/*/arch/res/*.html
-// @include      http://nowere.net/*/arch/*
-// @include      https://nowere.net/*/arch/*
-// @exclude      http://nowere.net/*/arch/*/
-// @exclude      https://nowere.net/*/arch/*/
+// @include      http://nowere.net/*/arch/
+// @include      https://nowere.net/*/arch/
 // @grant        none
 // ==/UserScript==
 
@@ -23,7 +21,6 @@
 
   const MAX_OPPOST_LENGTH = 200;
   const LOCALSTORAGE_KEY = 'iichan_archive';
-  const getBoard = () => window.location.href.match(/(?:[^:/]*\.[^:/]*)\/([^:/]*)/)[1];
 
   class Storage {
     constructor(board) {
@@ -55,8 +52,9 @@
   
 
   class UpdateQueue {
-    constructor(storage, callback) {
+    constructor(storage, parser, callback) {
       this.storage = storage;
+      this.parserCallback = parser;
       this.threadLoadedCallback = callback;
       this.queue = [];
       this.isRunning = false;
@@ -91,8 +89,8 @@
       return this.queue.length;
     }
   
-    loadThread(threadId) {
-      const savedThread = this.storage.getThread(threadId);
+    loadThread(thread) {
+      const savedThread = this.storage.getThread(thread.id);
       if (savedThread) {
         if (this.threadLoadedCallback) {
           this.threadLoadedCallback(savedThread);
@@ -104,8 +102,7 @@
           this.stop();
         }
       } else {
-        const url = `${ window.location.origin }${ window.location.pathname }${ threadId }.html`;
-        this.loadDoc(url);
+        this.loadDoc(thread.url);
       }
     }
   
@@ -117,7 +114,7 @@
           self._pendingXHR = null;
         }
         if (this.status == 200) {
-          self.onThreadLoaded(this.response);
+          self.onThreadLoaded(this.response, url);
         } else {
           // reject(this.stats);
         }
@@ -133,11 +130,12 @@
       xhr.send();
     }
   
-    onThreadLoaded(response) {
-      const newThread = ThreadParser.parseThread(response);
-      this.storage.addThread(newThread);
+    onThreadLoaded(response, url) {
+      const thread = this.parserCallback(response);
+      thread.url = url;
+  
       if (this.threadLoadedCallback) {
-        this.threadLoadedCallback(newThread);
+        this.threadLoadedCallback(thread);
       }
   
       if (this.queue.length > 0) {
@@ -149,282 +147,420 @@
   }
   
 
-  class TableParser {
-    static _parseRow(row) {
-      const COL = {
-        'name': 1,
-        'modified': 2,
-        'size': 3
-      };
-      const cols = row.querySelectorAll('td');
-      if (cols.length < 5) {
-        return null;
-      }
-      const el_link = cols[COL.name].querySelector('a');
-      if (!el_link) {
-        return null;
-      }
-      const size = cols[COL.size].innerText;
-      if (size === '-') {
-        return null;
-      }
-
-      return {
-        'href': el_link.href,
-        'id': el_link.innerText.split('.')[0],
-        'year': cols[COL.modified].innerText.match(/\d{4}/)[0]
-      };
-    }
-
-    static parseTable(callback) {
-      const table = document.querySelector('table');
-      const rows = table.querySelectorAll('tr');
-      for (let row of rows) {
-        let thread = this._parseRow(row);
-        if (thread) {
-          callback(thread);
-        }
-      }
-    }
-  }
-
-  class ThreadParser {
-    static _getVal(parent, q, field) {
-      const el = parent.querySelector(q);
-      return (el && el[field].toString().trim()) || '';
-    }
-
-    static _getTextNode(parent, q) {
-      const el = parent.querySelector(q);
-      let text = '';
-      for (let node of el.childNodes) {
-        if (node.nodeName === '#text') {
-          text += node.textContent;
-        }
-      }
-      return text.trim();
-    }
-
-    static _getQuantity(parent, q) {
-      return parent.querySelectorAll(q).length;
-    }
-
-    static _parseDate(text) {
-      const matches = text.match(/[А-я]{2}\s(\d+)\s([А-я]+)\s(\d{4})\s(\d{2}:\d{2}:\d{2})/);
-      // "Пн 21 января 2008 19:44:32", "21", "января", "2008", "19:44:32"
-      const month = matches[2];
-      const localeMonths = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
-      const m = localeMonths.indexOf(month) + 1;
-      // 2011-10-10T14:48:00
-      return Date.parse(`${matches[3]}-${m}-${matches[1]}T${matches[4]}`);
-    }
-
-    static parseThread(html) {
-      const query = {
-        id: 'div[id^="thread"] a[name]',
-        thumb: 'div[id^="thread"] img.thumb',
-        subject: 'div[id^="thread"] .filetitle',
-        post: 'div[id^="thread"] > blockquote',
-        created: 'div[id^="thread"] a + label',
-        bumped: 'div[id^="thread"] > table:last-child a + label',
-        replies: 'div[id^="thread"] .reply',
-        images: 'div[id^="thread"] img.thumb'
-      };
-
-      const parser = new DOMParser();
-      const thread = parser.parseFromString(html, "text/html");
-
-      return {
-        id: this._getVal(thread, query.id, 'name'),
-        thumb: this._getVal(thread, query.thumb, 'src'),
-        subject: this._getVal(thread, query.subject, 'innerText'),
-        post: this._getVal(thread, query.post, 'innerText').replace(/(\r\n|\n|\r)/gm, ' ').substr(0, MAX_OPPOST_LENGTH),
-        created: this._parseDate(this._getTextNode(thread, query.created)),
-        bumped: this._parseDate(this._getTextNode(thread, query.bumped)),
-        replies: this._getQuantity(thread, query.replies),
-        images: this._getQuantity(thread, query.images)
-      };
-    }
-  }
-
-  const constructPage = (stats) => {
-    document.head.insertAdjacentHTML('beforeend', `
-      <style type="text/css">
-      .ii-years a {
-        cursor: pointer;
-      }
-      
-      .ii-years a.current {
-        color: unset;
-        font-weight: bold;
-      }
-      
-      .ii-years span:not(:first-child) {
-        margin-left: .5em;
-      }
-      
-      .ii-years span::before {
-        content: '[';
-      }
-      
-      .ii-years span::after {
-        content: ']';
-      }
-      </style>
-      <style type="text/css">
-      body {
-        margin: 0;
-        padding: 8px;
-        margin-bottom: auto;
-      }
-      
-      blockquote blockquote {
-        margin-left: 0em
-      }
-      
-      form {
-        margin-bottom: 0px
-      }
-      
-      form .trap {
-        display: none
-      }
-      
-      .postarea {
-        text-align: center
-      }
-      
-      .postarea table {
-        margin: 0px auto;
-        text-align: left
-      }
-      
-      .thumb {
-        border: none;
-        float: left;
-        margin: 2px 20px
-      }
-      
-      .nothumb {
-        float: left;
-        background: #eee;
-        border: 2px dashed #aaa;
-        text-align: center;
-        margin: 2px 20px;
-        padding: 1em 0.5em 1em 0.5em;
-      }
-      
-      .reply blockquote,
-      blockquote:last-child {
-        margin-bottom: 0em
-      }
-      
-      .reflink a {
-        color: inherit;
-        text-decoration: none
-      }
-      
-      .reply .filesize {
-        margin-left: 20px
-      }
-      
-      .userdelete {
-        float: right;
-        text-align: center;
-        white-space: nowrap
-      }
-      
-      .replypage .replylink {
-        display: none
-      }
-      
-      .catthread {
-        vertical-align: top;
-        word-wrap: break-word;
-        overflow: hidden;
-        display: inline-block;
-        padding: 4px;
-        width: 210px;
-        max-height: 350px;
-        min-height: 200px;
-        margin-top: 5px;
-        position: relative;
-      }
-      
-      .catthread a {
-        text-decoration: none;
-        !important;
-      }
-      
-      .catthread img {
-        border: none;
-        float: unset;
-      }
-      
-      .catthreadlist {
-        padding: 20px 0px;
-        text-align: center;
-      }
-      
-      .catthreadlist a {
-        display: inline-block;
-      }
-      </style>
-      <link rel="alternate stylesheet" type="text/css" href="/cgi-bin/../css/burichan.css" title="Burichan">
-      <link rel="stylesheet" type="text/css" href="/cgi-bin/../css/futaba.css" title="Futaba">
-      <link rel="alternate stylesheet" type="text/css" href="/cgi-bin/../css/gurochan.css" title="Gurochan">
-      
-      `);
-    document.body.innerHTML = `
-    <h1 class="logo">Ычан — Архив /${ stats.board }/</h1>
-    <hr>
-    <div>[<a href="/${ stats.board }/index.html">Назад в /${ stats.board }/</a>]</div>
-    <div class="theader">Архив <b>(${ stats.threadsTotal })</b></div>
-    <div class="postarea ii-years"></div>
-    <div class="postarea">
-      <table class="ii-loader">
-        <tbody>
-          <tr>
-            <td><span class="ii-loader-label">Обновление списка тредов...</span></td>
-            <td>
-              <progress value="${ stats.threadsSaved }" max="${ stats.threadsTotal }"></progress>
-            </td>
-            <td>(<span class="ii-lodaer-value">${ stats.threadsSaved }</span>/<span class="ii-loader-total">${ stats.threadsTotal }</span>)</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <!-- <div class="postarea">
-    <table style="margin: inherit;">
-    <tbody>
-    <tr>
-    <td class="postblock">&nbsp;Поиск&nbsp;<a target="_blank" href="#" style="font-weight: normal;">[?]</a></td>
-    <td>
-    <input size="28" type="text" autocomplete="off" title="Поиск" id="searchbox" placeholder="Начните ввод для поиска...">
-    <button id="clearbtn">ｘ</button>
-    </td>
-    </tr>
-    <tr>
-    <td class="postblock">Сортировка&nbsp;&nbsp;</td>
-    <td>
-    <label style="cursor: pointer;">[<input name="sortmode" type="radio" value="0" checked> последний бамп &nbsp; /</label>
-    <label style="cursor: pointer;"><input name="sortmode" type="radio" value="1"> дата создания &nbsp; /</label>
-    <label style="cursor: pointer;"><input name="sortmode" type="radio" value="2"> количество постов &nbsp; /</label>
-    <label style="cursor: pointer;"><input name="sortmode" type="radio" value="3"> количество изображений ]</label>
-    <br>
-    <label style="cursor: pointer;">[<input name="sortdirection" type="radio" value="1" checked> по убыванию &nbsp; /</label>
-    <label style="cursor: pointer;"><input name="sortdirection" type="radio" value="0"> по возрастанию ]</label>
-    </td>
-    </tr>
-    </tbody>
-    </table>
-    </div> -->
-    <div class="catthreadlist">
-    </div>
-    <div>[<a href="/${ stats.board }/index.html">Назад в /${ stats.board }/</a>]</div>
-    <hr>
+  const getImageboard = () => {
+    class TableParser {
+      constructor() {
     
-    `;
+      }
+    
+      _parseRow(row) {
+        const COL = {
+          'name': 1,
+          'modified': 2,
+          'size': 3
+        };
+        const cols = row.querySelectorAll('td');
+        if (cols.length < 5) {
+          return null;
+        }
+        const el_link = cols[COL.name].querySelector('a');
+        if (!el_link) {
+          return null;
+        }
+        const size = cols[COL.size].innerText;
+        if (size === '-') {
+          return null;
+        }
+    
+        return {
+          'url': el_link.href,
+          'id': el_link.innerText.split('.')[0],
+          'year': cols[COL.modified].innerText.match(/\d{4}/)[0]
+        };
+      }
+    
+      parseTable(callback) {
+        const table = document.querySelector('table');
+        const rows = table.querySelectorAll('tr');
+        for (let row of rows) {
+          let thread = this._parseRow(row);
+          if (thread) {
+            callback(thread);
+          }
+        }
+      }
+    }
+    
+    class TableParserNowere extends TableParser {
+      constructor() {
+        super();
+        this.rMatchYear = /\d{4}/;
+        this.rMatchId = /\d+/;
+        this.qItems = 'pre > a:not(:first-child)';
+      }
+    
+      parseTable(callback) {
+        const links = document.querySelectorAll(this.qItems).forEach((link) => {
+          let dateText = link.nextSibling;
+          if (dateText && dateText.nodeName === '#text') {
+            callback({
+              'url': link.href,
+              'id': link.textContent.match(this.rMatchId)[0],
+              'year': dateText.textContent.match(this.rMatchYear)[0]
+            });
+          }
+        });
+      }
+    }
+    
+    class ThreadParser {
+      constructor() {
+        this.query = {
+          id: '#delform a[name]',
+          thumb: '#delform img.thumb',
+          subject: '#delform .filetitle',
+          post: '#delform > blockquote, #delform > div > blockquote',
+          created: '#delform a + label',
+          bumped: '#delform > table a + label, #delform > div > table a + label',
+          replies: '#delform .reply',
+          images: '#delform img.thumb'
+        };
+        this.rDate = /(\d{2})\/(\d{2})\/(\d{2})\([A-Za-z]*\)(\d{2}\:\d{2})/;
+      }
+    
+      _getVal(parent, q, field) {
+        const el = parent.querySelector(q);
+        return (el && el[field].toString().trim()) || '';
+      }
+    
+      _getTextNode(parent, q, last) {
+        last = last || false;
+        let el;
+        if (last) {
+          let queryResult = parent.querySelectorAll(q);
+          el = queryResult[queryResult.length - 1];
+        } else {
+          el = parent.querySelector(q);
+        }
+        if (!el) {
+          return null;
+        }
+        let text = '';
+        for (let node of el.childNodes) {
+          if (node.nodeName === '#text') {
+            text += node.textContent;
+          }
+        }
+        return text.trim();
+      }
+    
+      _getQuantity(parent, q) {
+        return parent.querySelectorAll(q).length;
+      }
+    
+      _parseDate(text) {
+        if (!text) {
+          return '';
+        }
+        // "17/07/08(Sat)18:06", "17", "07", "08", "18:06"
+        const matches = text.match(this.rDate);
+        // 2017-07-08T18:06:00
+        return Date.parse(`20${matches[1]}-${matches[2]}-${matches[3]}T${matches[4]}`);
+      }
+    
+      _parse(thread) {
+        const result = {
+          id: this._getVal(thread, this.query.id, 'name'),
+          thumb: this._getVal(thread, this.query.thumb, 'src'),
+          subject: this._getVal(thread, this.query.subject, 'innerText'),
+          post: this._getVal(thread, this.query.post, 'innerText').replace(/(\r\n|\n|\r)/gm, ' ').substr(0, MAX_OPPOST_LENGTH),
+          created: this._parseDate(this._getTextNode(thread, this.query.created)),
+          bumped: this._parseDate(this._getTextNode(thread, this.query.bumped, true)),
+          replies: this._getQuantity(thread, this.query.replies),
+          images: this._getQuantity(thread, this.query.images)
+        };
+        return result;
+      }
+    
+      parseThread(html) {
+        const parser = new DOMParser();
+        const thread = parser.parseFromString(html, "text/html");
+        return this._parse(thread);
+      }
+    }
+    
+    class IIchanThreadParser extends ThreadParser {
+      constructor() {
+        super();
+        this.rDate = /[А-я]{2}\s(\d+)\s([А-я]+)\s(\d{4})\s(\d{2}:\d{2}:\d{2})/;
+      }
+    
+      _parseDate(text) {
+          const matches = text.match(this.rDate);
+          // "Пн 21 января 2008 19:44:32", "21", "января", "2008", "19:44:32"
+          const month = matches[2];
+          const localeMonths = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+          const m = localeMonths.indexOf(month) + 1;
+          // 2011-10-10T14:48:00
+          return Date.parse(`${matches[3]}-${m}-${matches[1]}T${matches[4]}`);
+      }
+    }
+    
+    
+    class BaseBoard {
+      constructor(name) {
+        this.boardName = name;
+        this.rBoardMatch = /(?:[^:/]*\.[^:/]*)\/([^:/]*)/;
+        this.tableParser = new TableParser();
+        this.threadParser = new ThreadParser();
+      }
+    
+      setStylesheet() {
+        const getCookie = (n) => {
+          let a = `; ${document.cookie}`.match(`;\\s*${n}=([^;]+)`);
+          return a ? a[1] : '';
+        };
+    
+        const stylesheet = getCookie('wakabastyle') || 'Futaba';
+        const links = document.head.querySelectorAll('link');
+        for (let link of links) {
+          link.disabled = stylesheet !== link.title;
+        }
+      }
+    
+      constructPage(stats) {
+        document.head.insertAdjacentHTML('beforeend', `
+          <style type="text/css">
+          .ii-years a {
+            cursor: pointer;
+          }
+          
+          .ii-years a.current {
+            color: unset;
+            font-weight: bold;
+          }
+          
+          .ii-years span:not(:first-child) {
+            margin-left: .5em;
+          }
+          
+          .ii-years span::before {
+            content: '[';
+          }
+          
+          .ii-years span::after {
+            content: ']';
+          }
+          </style>
+          <style type="text/css">
+          body {
+            margin: 0;
+            padding: 8px;
+            margin-bottom: auto;
+          }
+          
+          blockquote blockquote {
+            margin-left: 0em
+          }
+          
+          form {
+            margin-bottom: 0px
+          }
+          
+          form .trap {
+            display: none
+          }
+          
+          .postarea {
+            text-align: center
+          }
+          
+          .postarea table {
+            margin: 0px auto;
+            text-align: left
+          }
+          
+          .thumb {
+            border: none;
+            float: left;
+            margin: 2px 20px
+          }
+          
+          .nothumb {
+            float: left;
+            background: #eee;
+            border: 2px dashed #aaa;
+            text-align: center;
+            margin: 2px 20px;
+            padding: 1em 0.5em 1em 0.5em;
+          }
+          
+          .reply blockquote,
+          blockquote:last-child {
+            margin-bottom: 0em
+          }
+          
+          .reflink a {
+            color: inherit;
+            text-decoration: none
+          }
+          
+          .reply .filesize {
+            margin-left: 20px
+          }
+          
+          .userdelete {
+            float: right;
+            text-align: center;
+            white-space: nowrap
+          }
+          
+          .replypage .replylink {
+            display: none
+          }
+          
+          .catthread {
+            vertical-align: top;
+            word-wrap: break-word;
+            overflow: hidden;
+            display: inline-block;
+            padding: 4px;
+            width: 210px;
+            max-height: 350px;
+            min-height: 200px;
+            margin-top: 5px;
+            position: relative;
+          }
+          
+          .catthread a {
+            text-decoration: none;
+            !important;
+          }
+          
+          .catthread img {
+            border: none;
+            float: unset;
+          }
+          
+          .catthreadlist {
+            padding: 20px 0px;
+            text-align: center;
+          }
+          
+          .catthreadlist a {
+            display: inline-block;
+          }
+          </style>
+          `);
+        document.body.innerHTML = `
+        <h1 class="logo">${this.boardName} — Архив /${ stats.board }/</h1>
+        <hr>
+        <div>[<a href="/${ stats.board }">Назад в /${ stats.board }/</a>]</div>
+        <div class="theader">Архив <b>(${ stats.threadsTotal })</b></div>
+        <div class="postarea ii-years"></div>
+        <div class="postarea">
+          <table class="ii-loader">
+            <tbody>
+              <tr>
+                <td><span class="ii-loader-label">Обновление списка тредов...</span></td>
+                <td>
+                  <progress value="${ stats.threadsSaved }" max="${ stats.threadsTotal }"></progress>
+                </td>
+                <td>(<span class="ii-lodaer-value">${ stats.threadsSaved }</span>/<span class="ii-loader-total">${ stats.threadsTotal }</span>)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <!-- <div class="postarea">
+        <table style="margin: inherit;">
+        <tbody>
+        <tr>
+        <td class="postblock">&nbsp;Поиск&nbsp;<a target="_blank" href="#" style="font-weight: normal;">[?]</a></td>
+        <td>
+        <input size="28" type="text" autocomplete="off" title="Поиск" id="searchbox" placeholder="Начните ввод для поиска...">
+        <button id="clearbtn">ｘ</button>
+        </td>
+        </tr>
+        <tr>
+        <td class="postblock">Сортировка&nbsp;&nbsp;</td>
+        <td>
+        <label style="cursor: pointer;">[<input name="sortmode" type="radio" value="0" checked> последний бамп &nbsp; /</label>
+        <label style="cursor: pointer;"><input name="sortmode" type="radio" value="1"> дата создания &nbsp; /</label>
+        <label style="cursor: pointer;"><input name="sortmode" type="radio" value="2"> количество постов &nbsp; /</label>
+        <label style="cursor: pointer;"><input name="sortmode" type="radio" value="3"> количество изображений ]</label>
+        <br>
+        <label style="cursor: pointer;">[<input name="sortdirection" type="radio" value="1" checked> по убыванию &nbsp; /</label>
+        <label style="cursor: pointer;"><input name="sortdirection" type="radio" value="0"> по возрастанию ]</label>
+        </td>
+        </tr>
+        </tbody>
+        </table>
+        </div> -->
+        <div class="catthreadlist">
+        </div>
+        <div>[<a href="/${ stats.board }">Назад в /${ stats.board }/</a>]</div>
+        <hr>
+        
+        `;
+        this.setStylesheet();
+      }
+    
+      getBoard() {
+        return window.location.href.match(this.rBoardMatch)[1];
+      }
+    
+      parseTable(callback) {
+        this.tableParser.parseTable(callback);
+      }
+    
+      parseThread(html) {
+        return this.threadParser.parseThread(html);
+      }
+    }
+    
+    const imageboards = {};
+    class IIchan extends BaseBoard {
+      constructor() {
+        super('Ычан');
+        this.threadParser = new IIchanThreadParser();
+      }
+    
+      constructPage(stats) {
+        document.head.insertAdjacentHTML('beforeend', `
+          <link rel="alternate stylesheet" type="text/css" href="/cgi-bin/../css/burichan.css" title="Burichan">
+          <link rel="stylesheet" type="text/css" href="/cgi-bin/../css/futaba.css" title="Futaba">
+          <link rel="alternate stylesheet" type="text/css" href="/cgi-bin/../css/gurochan.css" title="Gurochan">
+          
+          `);
+        super.constructPage(stats);
+      }
+    }
+    
+    imageboards['iichan.hk'] = IIchan;
+    
+    class Nowere extends BaseBoard {
+      constructor() {
+        super('Nowere.net');
+        this.tableParser = new TableParserNowere();
+      }
+    
+      constructPage(stats) {
+        document.head.insertAdjacentHTML('beforeend', `
+          <link rel="alternate stylesheet" type="text/css" href="/a/css/burichan.css" title="Burichan">
+          <link rel="alternate stylesheet" type="text/css" href="/a/css/foliant.css" title="Foliant">
+          <link rel="stylesheet" type="text/css" href="/a/css/futaba.css" title="Futaba">
+          <link rel="alternate stylesheet" type="text/css" href="/a/css/greenhell.css" title="Greenhell">
+          <link rel="alternate stylesheet" type="text/css" href="/a/css/gurochan.css" title="Gurochan">
+          <link rel="alternate stylesheet" type="text/css" href="/a/css/photon.css" title="Photon">
+          `);
+        super.constructPage(stats);
+      }
+    }
+    
+    imageboards['nowere.net'] = Nowere;
+    
+    const imageboardClass = imageboards[window.location.hostname] || BaseBoard;
+    return new imageboardClass();
   };
 
   const createThread = (thread) => {
@@ -433,10 +569,10 @@
     const bumpedDate = (new Date(thread.bumped)).toLocaleDateString();
 
     parent.insertAdjacentHTML('beforeend', `
-      <a title="#${ thread.id } (${ createdDate } - ${ bumpedDate })" href="./${ thread.id }.html">
+      <a title="#${ thread.id } (${ createdDate } - ${ bumpedDate })" href="${ thread.url }">
         <div class="catthread">
           <img src="${ thread.thumb }" alt="${ thread.id }">
-          <div><span title="Постов в треде">${ thread.replies + 1 }</span>/<span title="Картинок в треде">${ thread.images }</span></div>
+          <div><span title="Постов в треде">💬${ thread.replies + 1 }</span>/<span title="Картинок в треде">📎${ thread.images }</span></div>
           <div class="postertrip">[${ createdDate } - ${ bumpedDate }]</div>
           <div class="filetitle">${ thread.subject }</div>
           <span class="cattext">${ thread.post }</span>
@@ -446,22 +582,10 @@
       `);
   };
 
-  const setStylesheet = () => {
-    const getCookie = (n) => {
-      let a = `; ${document.cookie}`.match(`;\\s*${n}=([^;]+)`);
-      return a ? a[1] : '';
-    };
-
-    const stylesheet = getCookie('wakabastyle') || 'Futaba';
-    const links = document.head.querySelectorAll('link');
-    for (let link of links) {
-      link.disabled = stylesheet !== link.title;
-    }
-  };
-
   const main = () => {
+    const imageboard = getImageboard();
     const stats = {};
-    stats.board = getBoard();
+    stats.board = imageboard.getBoard();
     if (!stats.board) {
       return;
     }
@@ -471,17 +595,16 @@
 
     const threadsByYear = {};
     stats.threadsTotal = 0;
-    TableParser.parseTable((thread) => {
+    imageboard.parseTable((thread) => {
       stats.threadsTotal++;
       if (!(thread.year in threadsByYear)) {
         threadsByYear[thread.year] = [];
       }
-      threadsByYear[thread.year].push(thread.id);
+      threadsByYear[thread.year].push(thread);
     });
     let currentYear = Object.keys(threadsByYear)[0];
 
-    constructPage(stats);
-    setStylesheet();
+    imageboard.constructPage(stats);
 
     const setYear = (y) => {
       currentYear = y;
@@ -494,6 +617,7 @@
       if (selectedBtn) {
         selectedBtn.classList.add('current');
       }
+      updateQueue.clear();
       updateQueue.add(threadsByYear[y]);
       updateQueue.start();
     };
@@ -515,21 +639,25 @@
       createYearButton(year);
     }
 
-    const updateQueue = new UpdateQueue(threadsStorage, (thread) => {
-      createThread(thread);
+    const updateQueue = new UpdateQueue(threadsStorage,
+      (html) => imageboard.parseThread(html),
+      (thread) => {
+        threadsStorage.addThread(thread);
+        createThread(thread);
 
-      const threadsTotal = threadsByYear[currentYear].length;
-      const threadsLoaded = threadsTotal - updateQueue.size;
-      document.querySelector('.ii-loader progress').value = threadsLoaded;
-      document.querySelector('.ii-lodaer-value').innerText = threadsLoaded;
-      document.querySelector('.ii-loader progress').max = threadsTotal;
-      document.querySelector('.ii-loader-total').innerText = threadsTotal;
-      if (threadsTotal === threadsLoaded) {
-        document.querySelector('.ii-loader').style.display = 'none';
-      } else {
-        document.querySelector('.ii-loader').style.display = 'initial';
+        const threadsTotal = threadsByYear[currentYear].length;
+        const threadsLoaded = threadsTotal - updateQueue.size;
+        document.querySelector('.ii-loader progress').value = threadsLoaded;
+        document.querySelector('.ii-lodaer-value').innerText = threadsLoaded;
+        document.querySelector('.ii-loader progress').max = threadsTotal;
+        document.querySelector('.ii-loader-total').innerText = threadsTotal;
+        if (threadsTotal === threadsLoaded) {
+          document.querySelector('.ii-loader').style.display = 'none';
+        } else {
+          document.querySelector('.ii-loader').style.display = 'initial';
+        }
       }
-    });
+    );
 
     setYear(currentYear);
   };
