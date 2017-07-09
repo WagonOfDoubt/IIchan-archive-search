@@ -10,6 +10,10 @@
 // @include      https://iichan.hk/*/arch/res/*
 // @exclude      http://iichan.hk/*/arch/res/*.html
 // @exclude      https://iichan.hk/*/arch/res/*.html
+// @include      http://410chan.org/*/arch/res/*
+// @include      https://410chan.org/*/arch/res/*
+// @exclude      http://410chan.org/*/arch/res/*.html
+// @exclude      https://410chan.org/*/arch/res/*.html
 // @include      http://nowere.net/*/arch/
 // @include      https://nowere.net/*/arch/
 // @grant        none
@@ -164,7 +168,7 @@
           return null;
         }
         const el_link = cols[COL.name].querySelector('a');
-        if (!el_link) {
+        if (!el_link || /[\-\+]/.test(el_link.textContent)) {
           return null;
         }
         const size = cols[COL.size].innerText;
@@ -260,12 +264,15 @@
     
       _parseDate(text) {
         if (!text) {
-          return '';
+          return 0;
         }
         // "17/07/08(Sat)18:06", "17", "07", "08", "18:06"
         const matches = text.match(this.rDate);
+        if (!matches) {
+          return 0;
+        }
         // 2017-07-08T18:06:00
-        return Date.parse(`20${matches[1]}-${matches[2]}-${matches[3]}T${matches[4]}`);
+        return Date.parse(`20${matches[1]}-${matches[2]}-${matches[3]}T${matches[4]}`) || 0;
       }
     
       _parse(thread) {
@@ -296,32 +303,80 @@
       }
     
       _parseDate(text) {
+          if (!text) {
+            return 0;
+          }
           const matches = text.match(this.rDate);
           // "Пн 21 января 2008 19:44:32", "21", "января", "2008", "19:44:32"
           const month = matches[2];
           const localeMonths = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
           const m = localeMonths.indexOf(month) + 1;
           // 2011-10-10T14:48:00
-          return Date.parse(`${matches[3]}-${m}-${matches[1]}T${matches[4]}`);
+          return Date.parse(`${matches[3]}-${m}-${matches[1]}T${matches[4]}`) || 0;
+      }
+    }
+    
+    class _410chanThreadParser extends ThreadParser {
+      constructor() {
+        super();
+        this.query = {
+          id: '#delform a[name]:not(:first-child)',
+          thumb: '#delform img.thumb',
+          subject: '#delform > div > label > .filetitle',
+          post: '#delform > div > .postbody > blockquote, #delform > div > blockquote',
+          created: '#delform a + label', created2: '#delform a + label > .time',
+          bumped: '#delform > div > a + label', bumped2: '#delform div > a + label > .time',
+          replies: '#delform .reply',
+          images: '#delform img.thumb'
+        };
+        this.rDate = /(\d{2})\.(\d{2})\.(\d{4})\D*(\d{2}\:\d{2}\:\d{2})/;  // 22.04.2017 (Сб) 05:49:58
+      }
+    
+      _parseDate(text) {
+        if (!text) {
+            return 0;
+          }
+          const matches = text.match(this.rDate);
+          if (!matches) {
+            return 0;
+          }
+          // 2017-07-08T18:06:00
+          return Date.parse(`${matches[3]}-${matches[2]}-${matches[1]}T${matches[4]}`) || 0;
+      }
+    
+      _parse(thread) {
+        const result = {
+          id: this._getVal(thread, this.query.id, 'name'),
+          thumb: this._getVal(thread, this.query.thumb, 'src'),
+          subject: this._getVal(thread, this.query.subject, 'innerText'),
+          post: this._getVal(thread, this.query.post, 'innerText').replace(/(\r\n|\n|\r)/gm, ' ').substr(0, MAX_OPPOST_LENGTH),
+          created: this._parseDate(this._getTextNode(thread, this.query.created)) || this._parseDate(this._getTextNode(thread, this.query.created2)),
+          bumped: this._parseDate(this._getTextNode(thread, this.query.bumped, true)) || this._parseDate(this._getTextNode(thread, this.query.bumped2, true)),
+          replies: this._getQuantity(thread, this.query.replies),
+          images: this._getQuantity(thread, this.query.images)
+        };
+        return result;
       }
     }
     
     
     class BaseBoard {
       constructor(name) {
-        this.boardName = name;
+        this.boardName = name || '';
         this.rBoardMatch = /(?:[^:/]*\.[^:/]*)\/([^:/]*)/;
         this.tableParser = new TableParser();
         this.threadParser = new ThreadParser();
+        this.styleCookie = 'wakabastyle';
+        this.defaultStyle = 'Futaba';
       }
     
       setStylesheet() {
         const getCookie = (n) => {
-          let a = `; ${document.cookie}`.match(`;\\s*${n}=([^;]+)`);
+          let a = `; ${ document.cookie }`.match(`;\\s*${n}=([^;]+)`);
           return a ? a[1] : '';
         };
     
-        const stylesheet = getCookie('wakabastyle') || 'Futaba';
+        const stylesheet = getCookie(this.styleCookie) || this.defaultStyle;
         const links = document.head.querySelectorAll('link');
         for (let link of links) {
           link.disabled = stylesheet !== link.title;
@@ -456,7 +511,7 @@
         <h1 class="logo">${this.boardName} — Архив /${ stats.board }/</h1>
         <hr>
         <div>[<a href="/${ stats.board }">Назад в /${ stats.board }/</a>]</div>
-        <div class="theader">Архив <b>(${ stats.threadsTotal })</b></div>
+        <div class="theader replymode">Архив <b>(${ stats.threadsTotal })</b></div>
         <div class="postarea ii-years"></div>
         <div class="postarea">
           <table class="ii-loader">
@@ -559,23 +614,54 @@
     
     imageboards['nowere.net'] = Nowere;
     
+    class _410chan extends BaseBoard {
+      constructor() {
+        super('410chan');
+        this.threadParser = new _410chanThreadParser();
+        this.styleCookie = 'kustyle';
+        this.defaultStyle = 'Umnochan';
+      }
+    
+      constructPage(stats) {
+        document.head.insertAdjacentHTML('beforeend', `
+          <link rel="stylesheet" type="text/css" href="/css/img_global.css">
+          <link rel="stylesheet" type="text/css" href="/css/umnochan.css" title="Umnochan">
+          <link rel="alternate stylesheet" type="text/css" href="/css/burichan.css" title="Burichan">
+          <link rel="alternate stylesheet" type="text/css" href="/css/futaba.css" title="Futaba">
+          <link rel="alternate stylesheet" type="text/css" href="/css/photon.css" title="Photon">
+          <link rel="alternate stylesheet" type="text/css" href="/css/kusaba.css" title="Kusaba">
+          <link rel="alternate stylesheet" type="text/css" href="/css/bluemoon.css" title="Bluemoon">
+          
+          `);
+        super.constructPage(stats);
+      }
+    }
+    
+    imageboards['410chan.org'] = _410chan;
+    
     const imageboardClass = imageboards[window.location.hostname] || BaseBoard;
     return new imageboardClass();
   };
 
   const createThread = (thread) => {
     const parent = document.querySelector('.catthreadlist');
-    const createdDate = (new Date(thread.created)).toLocaleDateString();
-    const bumpedDate = (new Date(thread.bumped)).toLocaleDateString();
+    const createdDate = thread.created ? (new Date(thread.created)).toLocaleDateString() : '';
+    const bumpedDate = thread.bumped ? (new Date(thread.bumped)).toLocaleDateString() : '';
+    let datesString = '';
+    datesString += createdDate;
+    if (thread.created && thread.bumped) {
+      datesString += ' - ';
+    }
+    datesString += bumpedDate;
 
     parent.insertAdjacentHTML('beforeend', `
-      <a title="#${ thread.id } (${ createdDate } - ${ bumpedDate })" href="${ thread.url }">
-        <div class="catthread">
-          <img src="${ thread.thumb }" alt="${ thread.id }">
-          <div><span title="Постов в треде">💬${ thread.replies + 1 }</span>/<span title="Картинок в треде">📎${ thread.images }</span></div>
-          <div class="postertrip">[${ createdDate } - ${ bumpedDate }]</div>
-          <div class="filetitle">${ thread.subject }</div>
-          <span class="cattext">${ thread.post }</span>
+      <a title="#${ thread.id }${ datesString ? ' (' + datesString + ')' : ''}" href="${ thread.url }">
+        <div class="catthread catalogthread">
+          <img src="${ thread.thumb }" alt="${ thread.id }" class="catalogpic">
+          <div class="catalogposts"><span title="Постов в треде">💬${ thread.replies + 1 }</span> <span title="Картинок в треде">📎${ thread.images }</span></div>
+          <div class="postertrip">${ datesString ? '[' + datesString + ']' : ''}</div>
+          <div class="filetitle catalogsubject">${ thread.subject }</div>
+          <span class="cattext catalogmsg">${ thread.post }</span>
         </div>
       </a>
       

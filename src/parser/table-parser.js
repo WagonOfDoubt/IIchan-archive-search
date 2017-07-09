@@ -14,7 +14,7 @@ class TableParser {
       return null;
     }
     const el_link = cols[COL.name].querySelector('a');
-    if (!el_link) {
+    if (!el_link || /[\-\+]/.test(el_link.textContent)) {
       return null;
     }
     const size = cols[COL.size].innerText;

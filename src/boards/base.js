@@ -3,19 +3,21 @@
 
 class BaseBoard {
   constructor(name) {
-    this.boardName = name;
+    this.boardName = name || '';
     this.rBoardMatch = /(?:[^:/]*\.[^:/]*)\/([^:/]*)/;
     this.tableParser = new TableParser();
     this.threadParser = new ThreadParser();
+    this.styleCookie = 'wakabastyle';
+    this.defaultStyle = 'Futaba';
   }
 
   setStylesheet() {
     const getCookie = (n) => {
-      let a = `; ${document.cookie}`.match(`;\\s*${n}=([^;]+)`);
+      let a = `; ${ document.cookie }`.match(`;\\s*${n}=([^;]+)`);
       return a ? a[1] : '';
     };
 
-    const stylesheet = getCookie('wakabastyle') || 'Futaba';
+    const stylesheet = getCookie(this.styleCookie) || this.defaultStyle;
     const links = document.head.querySelectorAll('link');
     for (let link of links) {
       link.disabled = stylesheet !== link.title;
@@ -48,3 +50,4 @@ class BaseBoard {
 const imageboards = {};
 //=require iichan.js
 //=require nowere.js
+//=require 410chan.js

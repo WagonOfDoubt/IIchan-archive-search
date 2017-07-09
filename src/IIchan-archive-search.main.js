@@ -17,8 +17,14 @@
 
   const createThread = (thread) => {
     const parent = document.querySelector('.catthreadlist');
-    const createdDate = (new Date(thread.created)).toLocaleDateString();
-    const bumpedDate = (new Date(thread.bumped)).toLocaleDateString();
+    const createdDate = thread.created ? (new Date(thread.created)).toLocaleDateString() : '';
+    const bumpedDate = thread.bumped ? (new Date(thread.bumped)).toLocaleDateString() : '';
+    let datesString = '';
+    datesString += createdDate;
+    if (thread.created && thread.bumped) {
+      datesString += ' - ';
+    }
+    datesString += bumpedDate;
 
     parent.insertAdjacentHTML('beforeend', `
       //=include html/preview.html
