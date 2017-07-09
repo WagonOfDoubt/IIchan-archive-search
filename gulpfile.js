@@ -14,4 +14,9 @@ gulp.task('make', function(cb) {
 });
 
 
+gulp.task('make:watch', function () {
+  gulp.watch('./src/**', ['make']);
+});
+
+
 gulp.task('default', ['make']);
