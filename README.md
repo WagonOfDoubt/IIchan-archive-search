@@ -8,7 +8,7 @@
 
 Для установки юзерскрипта скачайте расширение [Tampermonkey](https://tampermonkey.net/) или [Greasemonkey](http://www.greasespot.net/) для вашего браузера.
 
-> **[\[ INSTALL \]](https://github.com/WagonOfDoubt/IIchan-archive-search/raw/master/IIchan-archive-search.user.js)**
+> **[\[ INSTALL \]](https://github.com/WagonOfDoubt/IIchan-archive-search/raw/master/dist/IIchan-archive-search.user.js)**
 
 ## Как оно работает
 

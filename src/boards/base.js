@@ -2,13 +2,13 @@
 //=require ../parser/thread-parser.js
 
 class BaseBoard {
-  constructor(name) {
+  constructor(name, { rBoardMatch, tableParser, threadParser, styleCookie, defaultStyle }) {
     this.boardName = name || '';
-    this.rBoardMatch = /(?:[^:/]*\.[^:/]*)\/([^:/]*)/;
-    this.tableParser = new TableParser();
-    this.threadParser = new ThreadParser();
-    this.styleCookie = 'wakabastyle';
-    this.defaultStyle = 'Futaba';
+    this.rBoardMatch = rBoardMatch || /(?:[^:/]*\.[^:/]*)\/([^:/]*)/;
+    this.tableParser = tableParser || new TableParser();
+    this.threadParser = threadParser || new ThreadParser();
+    this.styleCookie = styleCookie || 'wakabastyle';
+    this.defaultStyle = defaultStyle || 'Futaba';
   }
 
   setStylesheet() {
