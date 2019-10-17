@@ -52,8 +52,12 @@ class ThreadParser {
     if (!matches) {
       return 0;
     }
+    const year = (matches[1] || '0').padStart(2, '0');
+    const month = (matches[2] || '0').padStart(2, '0');
+    const day = (matches[3] || '0').padStart(2, '0');
+    const time = (matches[4] || '00:00');
     // 2017-07-08T18:06:00
-    return Date.parse(`20${matches[1]}-${matches[2]}-${matches[3]}T${matches[4]}`) || 0;
+    return Date.parse(`20${year}-${month}-${day}T${time}`) || 0;
   }
 
   _parse(thread) {

@@ -22,8 +22,13 @@ class _410chanThreadParser extends ThreadParser {
       if (!matches) {
         return 0;
       }
+      const year = matches[3];
+      const month = (matches[2] || '0').padStart(2, '0');
+      const day = (matches[1] || '0').padStart(2, '0');
+      const time = (matches[4] || '00:00');
       // 2017-07-08T18:06:00
-      return Date.parse(`${matches[3]}-${matches[2]}-${matches[1]}T${matches[4]}`) || 0;
+      const dateStr = `${year}-${month}-${day}T${time}`;
+      return Date.parse(dateStr) || 0;
   }
 
   _parse(thread) {

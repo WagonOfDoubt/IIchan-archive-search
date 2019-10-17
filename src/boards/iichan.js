@@ -5,16 +5,24 @@ class IIchanThreadParser extends ThreadParser {
   }
 
   _parseDate(text) {
-      if (!text) {
-        return 0;
-      }
-      const matches = text.match(this.rDate);
-      // "Пн 21 января 2008 19:44:32", "21", "января", "2008", "19:44:32"
-      const month = matches[2];
-      const localeMonths = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
-      const m = localeMonths.indexOf(month) + 1;
-      // 2011-10-10T14:48:00
-      return Date.parse(`${matches[3]}-${m}-${matches[1]}T${matches[4]}`) || 0;
+    if (!text) {
+      return 0;
+    }
+    const matches = text.match(this.rDate);
+    if (!matches) {
+      return 0;
+    }
+    // "Пн 21 января 2008 19:44:32", "21", "января", "2008", "19:44:32"
+    const ruMonth = matches[2];
+    const localeMonths = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+    const m = localeMonths.indexOf(ruMonth) + 1;
+    const year = matches[3];
+    const month = (m > 0 ? m.toString() : '0').padStart(2, '0');
+    const day = (matches[1] || '0').padStart(2, '0');
+    const time = (matches[4] || '00:00');
+    // 2011-10-10T14:48:00
+    const dateStr = `${year}-${month}-${day}T${time}`;
+    return Date.parse(dateStr) || 0;
   }
 }
 
