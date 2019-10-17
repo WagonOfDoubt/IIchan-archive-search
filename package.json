@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "Archive viewer userscript for some imageboards",
   "scripts": {
-    "build": "gulp",
+    "build": "npx gulp",
+    "watch": "npx gulp watch",
     "test": "jshint *.js **/*.js"
   },
   "repository": {
@@ -22,16 +23,20 @@
   },
   "homepage": "https://github.com/WagonOfDoubt/IIchan-archive-search#readme",
   "devDependencies": {
-    "@babel/core": "^7.4.4",
-    "@babel/preset-env": "^7.4.4",
-    "@babel/register": "^7.4.4",
-    "del": "^4.1.0",
-    "gulp": "^4.0.1",
+    "@babel/core": "^7.6.4",
+    "@babel/preset-env": "^7.6.3",
+    "@babel/register": "^7.6.2",
+    "del": "^4.1.1",
+    "gulp": "^4.0.2",
     "gulp-concat": "^2.6.1",
     "gulp-include": "^2.4.1",
     "gulp-rename": "^1.4.0"
   },
   "jshintConfig": {
-    "esversion": 9
+    "esversion": 9,
+    "unused": "vars",
+    "varstmt": true,
+    "undef": true,
+    "browser": true
   }
 }
