@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IIchan archive search
 // @namespace    https://github.com/WagonOfDoubt/IIchan-archive-search
-// @version      0.3
+// @version      0.4
 // @description  Archive viewer userscript for some imageboards
 // @icon         https://iichan.hk/favicon.ico
 // @author       Cirno
