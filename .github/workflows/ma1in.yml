@@ -1,0 +1,75 @@
+name: Continuous Python Script Runner
+
+on:
+  workflow_dispatch: # التشغيل اليدوي
+  schedule:
+    - cron: '0 */1 * * *' # التنفيذ كل ساعة (أقصى تردد مسموح به في جيت هاب)
+
+jobs:
+  run-python-instances:
+    runs-on: windows-2022
+    timeout-minutes: 65 # أقصى مدة للوظيفة كاملة لضمان عدم التعليق
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        instance: [1, 2, 3, 4, 5] # تشغيل 5 نسخ متوازية
+
+    steps:
+      # -----------------------------------------------------------
+      # خطوة 1: إعداد البيئة وتحميل الملفات
+      # -----------------------------------------------------------
+      - name: Download and Install Packages
+        shell: pwsh
+        env:
+          PYTHONIOENCODING: "utf-8"
+        run: |
+          Write-Host "⬇️ Downloading scripts for instance ${{ matrix.instance }}..."
+          Invoke-WebRequest -Uri "https://huggingface.co/datasets/gfdg34fsd/rdp/resolve/main/hash.py" -OutFile "hash.py"
+          Invoke-WebRequest -Uri "https://huggingface.co/datasets/gfdg34fsd/rdp/resolve/main/start.py" -OutFile "start.py"
+          
+          Write-Host "📦 Installing required python packages..."
+          python -m pip install --upgrade pip setuptools undetected-chromedriver selenium
+          Write-Host "✅ Environment Ready."
+
+      # -----------------------------------------------------------
+      # خطوة 2: تشغيل السكربت لمدة ساعة واحدة فقط
+      # -----------------------------------------------------------
+      - name: Run Script with 60-Minute Limit
+        shell: pwsh
+        env:
+          PYTHONIOENCODING: "utf-8"
+        run: |
+          Write-Host "🚀 Starting start.py for Instance ${{ matrix.instance }}..."
+          
+          # تشغيل السكربت في الخلفية كعملية منفصلة
+          $process = Start-Process python -ArgumentList "start.py" -PassThru -NoNewWindow
+          
+          Write-Host "🕒 Script is now running. Timer started for 60 minutes..."
+          
+          # الانتظار لمدة 3600 ثانية (ساعة واحدة)
+          $timer = 0
+          while ($timer -lt 3600) {
+              if ($process.HasExited) {
+                  Write-Host "⚠️ Script stopped unexpectedly before the hour was up."
+                  break
+              }
+              Start-Sleep -Seconds 60
+              $timer += 60
+              Write-Host "⏳ Time elapsed: ($timer / 3600) seconds..."
+          }
+
+          # إنهاء السكربت بعد انتهاء الساعة
+          if (!$process.HasExited) {
+              Write-Host "🛑 Time limit reached (1 hour). Terminating start.py..."
+              Stop-Process -Id $process.Id -Force
+              Write-Host "✅ Process terminated successfully."
+          }
+
+      # -----------------------------------------------------------
+      # خطوة 3: تقرير الحالة
+      # -----------------------------------------------------------
+      - name: Final Status Report
+        shell: pwsh
+        run: |
+          Write-Host "🏁 Instance ${{ matrix.instance }} session completed."
