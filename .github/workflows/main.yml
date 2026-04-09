@@ -41,7 +41,7 @@ jobs:
           PYTHONIOENCODING: "utf-8"
         run: |
           Write-Host "🚀 Starting start.py for Instance ${{ matrix.instance }}..."
-          
+          $env:PATH += ";C:\Program Files\Cloudflare\Cloudflare WARP"
           # تشغيل السكربت في الخلفية كعملية منفصلة
           $process = Start-Process python -ArgumentList "start.py" -PassThru -NoNewWindow
           
